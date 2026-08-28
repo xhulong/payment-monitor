@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 部署教程
+    url: https://github.com/xhulong/payment-monitor/blob/main/docs/DEPLOYMENT.md
+    about: 部署与配置问题请先查阅部署教程
+  - name: 💬 讨论区
+    url: https://github.com/xhulong/payment-monitor/discussions
+    about: 使用交流、疑问与讨论请前往 Discussions

@@ -1,0 +1,50 @@
+name: ✨ 功能建议
+description: 提交一个功能想法或改进建议
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的建议！请描述清楚你想解决的问题和期望的解决方案。
+  - type: dropdown
+    id: component
+    attributes:
+      label: 相关组件
+      options:
+        - 后端服务 (payment-monitor-server)
+        - 管理后台前端 (payment-monitor-admin)
+        - Android 客户端 (payment-notification-monitor)
+        - 部署 / Docker
+        - 文档
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 这个功能解决什么痛点？
+      placeholder: 我在使用中遇到了...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的方案
+      description: 你期望的实现方式或交互
+      placeholder: 希望可以...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 备选方案（可选）
+      description: 你还考虑过其他方案吗？
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: 参与贡献
+      description: 你是否愿意自己实现这个功能并提交 PR？
+      options:
+        - label: 我愿意实现并提交 PR
