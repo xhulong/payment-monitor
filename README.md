@@ -12,7 +12,6 @@
 [![Android](https://img.shields.io/badge/Android-Kotlin%20%2B%20Compose-brightgreen.svg)]()
 
 > ⭐ **如果这个项目对你有帮助，请给我们点个 Star 支持一下**，你的支持是我们持续维护的动力！
-> [![Star History](https://api.star-history.com/svg?repos=xhulong/payment-monitor&type=Date)](https://star-history.com/#xhulong/payment-monitor&Date)
 
 ---
 
@@ -159,3 +158,11 @@ cd payment-notification-monitor
 ## License
 
 本项目基于 [MIT License](LICENSE) 开源，可免费商用，请在项目中保留开源协议文件。
+
+---
+
+## ⭐ Star History
+
+如果 LuLuPay 对你有帮助，欢迎点个 Star，你的支持是我们持续维护的动力！
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xhulong/payment-monitor&type=Date)](https://star-history.com/#xhulong/payment-monitor&Date)
