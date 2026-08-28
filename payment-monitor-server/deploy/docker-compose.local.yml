@@ -1,0 +1,171 @@
+name: payment-monitor-local
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: payment-monitor-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_monitor
+      POSTGRES_USER: payment_monitor
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - payment_monitor_postgres:/var/lib/postgresql/data
+      - ../script/sql/postgres/postgres_ry_vue.sql:/docker-entrypoint-initdb.d/00_ry_vue.sql:ro
+      - ../script/sql/postgres/postgres_ry_job.sql:/docker-entrypoint-initdb.d/01_ry_job.sql:ro
+      - ../script/sql/postgres/postgres_ry_workflow.sql:/docker-entrypoint-initdb.d/02_ry_workflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_monitor -d payment_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: payment-monitor-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - payment_monitor_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: payment-monitor-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: UTC
+    volumes:
+      - payment_monitor_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  backend:
+    image: eclipse-temurin:21-jre
+    container_name: payment-monitor-backend
+    restart: unless-stopped
+    working_dir: /app
+    command: ["java", "-jar", "/app/ruoyi-admin.jar"]
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/payment_monitor
+      DB_USERNAME: payment_monitor
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SA_TOKEN_JWT_SECRET: ${SA_TOKEN_JWT_SECRET}
+      PAYMENT_MASTER_KEY: ${PAYMENT_MASTER_KEY}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://localhost:8080}
+      PAYMENT_RAW_PAYLOAD_UPLOAD_ENABLED: ${PAYMENT_RAW_PAYLOAD_UPLOAD_ENABLED:-false}
+      PAYMENT_WEBHOOK_ENABLED: ${PAYMENT_WEBHOOK_ENABLED:-true}
+      PAYMENT_WEBHOOK_ALLOW_HTTP: ${PAYMENT_WEBHOOK_ALLOW_HTTP:-true}
+      PAYMENT_WEBHOOK_ALLOW_PRIVATE_NETWORK: ${PAYMENT_WEBHOOK_ALLOW_PRIVATE_NETWORK:-true}
+      PAYMENT_EASYPAY_ENABLED: ${PAYMENT_EASYPAY_ENABLED:-true}
+      PAYMENT_EASYPAY_ALLOW_HTTP: ${PAYMENT_EASYPAY_ALLOW_HTTP:-true}
+      PAYMENT_EASYPAY_ALLOW_PRIVATE_NETWORK: ${PAYMENT_EASYPAY_ALLOW_PRIVATE_NETWORK:-true}
+      PAYMENT_EASYPAY_REQUIRE_HTTPS_QUERY: ${PAYMENT_EASYPAY_REQUIRE_HTTPS_QUERY:-false}
+      PAYMENT_INTEGRATION_ACTIVE_KEY_ID: ${PAYMENT_INTEGRATION_ACTIVE_KEY_ID:-payment-integration-local-01}
+      PAYMENT_INTEGRATION_MASTER_KEY: ${PAYMENT_INTEGRATION_MASTER_KEY}
+      PAYMENT_AGREEMENT_VERSION: ${PAYMENT_AGREEMENT_VERSION:-2026-07}
+      PAYMENT_PRIVACY_VERSION: ${PAYMENT_PRIVACY_VERSION:-2026-07}
+      ACCOUNT_MFA_MASTER_KEY: ${ACCOUNT_MFA_MASTER_KEY}
+      ACCOUNT_RECOVERY_CODE_PEPPER: ${ACCOUNT_RECOVERY_CODE_PEPPER}
+      MAIL_OUTBOX_MASTER_KEY: ${MAIL_OUTBOX_MASTER_KEY}
+      MAIL_OUTBOX_ACTIVE_KEY_ID: ${MAIL_OUTBOX_ACTIVE_KEY_ID:-mail-outbox-2026-01}
+      MAIL_SETTINGS_MASTER_KEY: ${MAIL_SETTINGS_MASTER_KEY}
+      MAIL_SETTINGS_ACTIVE_KEY_ID: ${MAIL_SETTINGS_ACTIVE_KEY_ID:-mail-settings-2026-01}
+      APK_DOWNLOAD_SIGNING_SECRET: ${APK_DOWNLOAD_SIGNING_SECRET}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-payment-monitor-private}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-smtp.qq.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_FROM: ${SMTP_FROM:-${SMTP_USERNAME}}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+      SMTP_SSL_ENABLE: ${SMTP_SSL_ENABLE:-true}
+      TZ: Asia/Shanghai
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../ruoyi-admin/target/ruoyi-admin.jar:/app/ruoyi-admin.jar:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  admin:
+    image: nginx:1.27-alpine
+    container_name: payment-monitor-admin
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    volumes:
+      - ../../payment-monitor-admin/dist:/usr/share/nginx/html:ro
+      - ./nginx-payment-monitor.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  payment_monitor_postgres:
+  payment_monitor_redis:
+  payment_monitor_minio:

@@ -1,0 +1,304 @@
+name: payment-monitor-production
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_monitor
+      POSTGRES_USER: payment_monitor
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: UTC
+    volumes:
+      - production_postgres:/var/lib/postgresql/data
+      - ../script/sql/postgres/postgres_ry_vue.sql:/docker-entrypoint-initdb.d/00_ry_vue.sql:ro
+      - ../script/sql/postgres/postgres_ry_job.sql:/docker-entrypoint-initdb.d/01_ry_job.sql:ro
+      - ../script/sql/postgres/postgres_ry_workflow.sql:/docker-entrypoint-initdb.d/02_ry_workflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_monitor -d payment_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - production_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: UTC
+    volumes:
+      - production_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  backend:
+    image: ${BACKEND_IMAGE:-payment-monitor-backend:phase-l}
+    build:
+      context: ..
+      dockerfile: deploy/production/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/payment_monitor
+      DB_USERNAME: payment_monitor
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SA_TOKEN_JWT_SECRET: ${SA_TOKEN_JWT_SECRET}
+      PAYMENT_MASTER_KEY: ${PAYMENT_MASTER_KEY}
+      PAYMENT_PUBLIC_BASE_URL: https://${PAYMENT_DOMAIN}
+      PAYMENT_RAW_PAYLOAD_UPLOAD_ENABLED: "false"
+      PAYMENT_WEBHOOK_ENABLED: "true"
+      PAYMENT_WEBHOOK_ALLOW_HTTP: "false"
+      PAYMENT_WEBHOOK_ALLOW_PRIVATE_NETWORK: "false"
+      PAYMENT_EASYPAY_ENABLED: "true"
+      PAYMENT_EASYPAY_ALLOW_HTTP: "false"
+      PAYMENT_EASYPAY_ALLOW_PRIVATE_NETWORK: "false"
+      PAYMENT_EASYPAY_REQUIRE_HTTPS_QUERY: "true"
+      PAYMENT_INTEGRATION_ACTIVE_KEY_ID: ${PAYMENT_INTEGRATION_ACTIVE_KEY_ID:-payment-integration-2026-01}
+      PAYMENT_INTEGRATION_MASTER_KEY: ${PAYMENT_INTEGRATION_MASTER_KEY}
+      PAYMENT_MERCHANT_API_RATE_LIMIT_PER_MINUTE: ${PAYMENT_MERCHANT_API_RATE_LIMIT_PER_MINUTE:-120}
+      PAYMENT_AGREEMENT_VERSION: ${PAYMENT_AGREEMENT_VERSION:-2026-07}
+      PAYMENT_PRIVACY_VERSION: ${PAYMENT_PRIVACY_VERSION:-2026-07}
+      ACCOUNT_MFA_MASTER_KEY: ${ACCOUNT_MFA_MASTER_KEY}
+      ACCOUNT_RECOVERY_CODE_PEPPER: ${ACCOUNT_RECOVERY_CODE_PEPPER}
+      MAIL_OUTBOX_MASTER_KEY: ${MAIL_OUTBOX_MASTER_KEY}
+      MAIL_OUTBOX_ACTIVE_KEY_ID: ${MAIL_OUTBOX_ACTIVE_KEY_ID:-mail-outbox-2026-01}
+      MAIL_SETTINGS_MASTER_KEY: ${MAIL_SETTINGS_MASTER_KEY}
+      MAIL_SETTINGS_ACTIVE_KEY_ID: ${MAIL_SETTINGS_ACTIVE_KEY_ID:-mail-settings-2026-01}
+      APK_DOWNLOAD_SIGNING_SECRET: ${APK_DOWNLOAD_SIGNING_SECRET}
+      ANDROID_EXPECTED_PACKAGE_NAME: ${ANDROID_EXPECTED_PACKAGE_NAME:-com.xhulong.paymentmonitor}
+      ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: ${ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256}
+      AUTH_REFRESH_COOKIE_SECURE: "true"
+      API_CRYPTO_V2_ENABLED: "true"
+      API_CRYPTO_V2_ACTIVE_KID: ${API_CRYPTO_V2_ACTIVE_KID:-payment-monitor-rsa-2026-01}
+      API_CRYPTO_V2_KEY_PROVIDER: local-secret
+      API_CRYPTO_V2_PUBLIC_KEY_FILE: /run/secrets/api_crypto_v2_public_key
+      API_CRYPTO_V2_PRIVATE_KEY_FILE: /run/secrets/api_crypto_v2_private_key
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-payment-monitor-private}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_ENABLED: ${SMTP_ENABLED:-true}
+      MONITOR_USERNAME: prometheus
+      MONITOR_PASSWORD: ${MONITOR_PASSWORD}
+      TZ: UTC
+    secrets:
+      - api_crypto_v2_public_key
+      - api_crypto_v2_private_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+    networks: [backend, monitoring]
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    logging:
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  gateway:
+    image: ${ADMIN_IMAGE:-payment-monitor-admin:phase-l}
+    build:
+      context: ../../PaymentMonitorAdmin
+      dockerfile: Dockerfile.production
+      args:
+        VITE_APP_API_CRYPTO_V2: "true"
+    restart: unless-stopped
+    environment:
+      PAYMENT_DOMAIN: ${PAYMENT_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./production/certs:/etc/nginx/certs:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      grafana:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q --spider https://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [edge, backend, monitoring]
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    logging:
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+    volumes:
+      - ./production/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./production/payment-alerts.yml:/etc/prometheus/rules/payment-alerts.yml:ro
+      - production_prometheus:/prometheus
+    secrets:
+      - monitor_password
+    depends_on:
+      backend:
+        condition: service_healthy
+      alertmanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "promtool", "check", "healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [monitoring]
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ./production/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - production_alertmanager:/alertmanager
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9093/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [monitoring]
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
+    networks: [monitoring]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://${PAYMENT_DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - production_grafana:/var/lib/grafana
+      - ./production/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./production/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [monitoring]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://payment_monitor:${DB_PASSWORD}@postgres:5432/payment_monitor?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [backend, monitoring]
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks: [backend, monitoring]
+
+networks:
+  edge:
+  backend:
+    internal: true
+  monitoring:
+    internal: true
+
+volumes:
+  production_postgres:
+  production_redis:
+  production_prometheus:
+  production_grafana:
+  production_minio:
+  production_alertmanager:
+
+secrets:
+  monitor_password:
+    file: ./production/secrets/monitor_password
+  api_crypto_v2_public_key:
+    file: ${API_CRYPTO_V2_PUBLIC_KEY_HOST_FILE:-./production/secrets/api-crypto-v2-public.pem}
+  api_crypto_v2_private_key:
+    file: ${API_CRYPTO_V2_PRIVATE_KEY_HOST_FILE:-./production/secrets/api-crypto-v2-private.pem}

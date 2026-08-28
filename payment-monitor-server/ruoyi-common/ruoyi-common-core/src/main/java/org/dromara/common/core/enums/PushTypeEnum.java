@@ -1,0 +1,34 @@
+package org.dromara.common.core.enums;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+/**
+ * 推送消息类型枚举
+ *
+ * @author Lion Li
+ */
+@Getter
+@AllArgsConstructor
+public enum PushTypeEnum {
+
+    /**
+     * 通用消息
+     */
+    MESSAGE("message"),
+
+    /**
+     * 通知公告
+     */
+    NOTICE("notice"),
+
+    /**
+     * 自定义消息
+     */
+    CUSTOM("custom");
+
+    /**
+     * 消息类型标识。
+     */
+    private final String type;
+}

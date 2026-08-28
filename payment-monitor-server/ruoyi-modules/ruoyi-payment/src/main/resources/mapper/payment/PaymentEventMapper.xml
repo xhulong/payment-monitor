@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.mapper.PaymentEventMapper">
+
+    <insert id="insertOnConflict" parameterType="org.dromara.payment.domain.PmPaymentEvent">
+        insert into pm_payment_event (
+            id, merchant_id, device_id, device_sequence, client_event_id, platform, direction,
+            amount_minor, currency, event_time, event_time_ms,
+            client_received_at, client_received_at_ms,
+            client_sent_at, client_sent_at_ms, received_at, parse_status,
+            parser_version, matched_rule, fingerprint,
+            notification_key_hash, raw_hash, raw_payload, status, duplicate_status
+        ) values (
+            #{id}, #{merchantId}, #{deviceId}, #{deviceSequence}, #{clientEventId}, #{platform}, #{direction},
+            #{amountMinor}, #{currency}, #{eventTime}, #{eventTimeMs},
+            #{clientReceivedAt}, #{clientReceivedAtMs},
+            #{clientSentAt}, #{clientSentAtMs}, #{receivedAt}, #{parseStatus},
+            #{parserVersion}, #{matchedRule}, #{fingerprint},
+            #{notificationKeyHash}, #{rawHash},
+            #{rawPayload,typeHandler=org.dromara.payment.mybatis.JsonbStringTypeHandler},
+            #{status}, #{duplicateStatus}
+        )
+        on conflict do nothing
+    </insert>
+
+    <select id="selectByIdForUpdate"
+            resultType="org.dromara.payment.domain.PmPaymentEvent">
+        select * from pm_payment_event
+        where id = #{id} and merchant_id = #{merchantId}
+        for update
+    </select>
+
+    <select id="selectManualMatchCandidates"
+            resultType="org.dromara.payment.domain.PmPaymentEvent">
+        select e.*
+        from pm_payment_event e
+        where e.merchant_id = #{merchantId}
+          and e.direction = 'INCOME'
+          and e.amount_minor is not null
+          and e.status in ('RECEIVED', 'REVIEWED', 'CONFLICT')
+          and coalesce(e.duplicate_status, 'NONE') != 'CONFIRMED'
+          and not exists (
+              select 1
+              from pm_payment_order o
+              where o.merchant_id = e.merchant_id
+                and o.matched_event_id = e.id
+                and o.id != #{orderId}
+          )
+          and not exists (
+              select 1
+              from pm_payment_transaction t
+              where t.merchant_id = e.merchant_id
+                and t.event_id = e.id
+                and t.order_id is not null
+                and t.order_id != #{orderId}
+          )
+        order by
+          case
+              when e.platform = #{platform} and e.amount_minor = #{amountMinor}
+                  then 0
+              else 1
+          end,
+          coalesce(e.event_time, e.received_at) desc,
+          e.id desc
+        limit #{limit}
+    </select>
+
+    <select id="countManualMatchOccupations" resultType="int">
+        select (
+            (
+                select count(*)
+                from pm_payment_order o
+                where o.merchant_id = #{merchantId}
+                  and o.matched_event_id = #{eventId}
+                  and o.id != #{orderId}
+            )
+            +
+            (
+                select count(*)
+                from pm_payment_transaction t
+                where t.merchant_id = #{merchantId}
+                  and t.event_id = #{eventId}
+                  and t.order_id is not null
+                  and t.order_id != #{orderId}
+            )
+        )::integer
+    </select>
+</mapper>

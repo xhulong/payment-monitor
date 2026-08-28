@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "capturedOn": "2026-07-17",
+  "device": "Xiaomi M2006J10C / Android 12",
+  "cases": [
+    {
+      "caseId": "real_alipay_income_001",
+      "scenario": "ALIPAY_MERCHANT_INCOME",
+      "sourcePackageVersion": "12.12.6.8000",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "0.01"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": -461052380,
+        "notificationTag": null,
+        "notificationKey": "<KEY_ALIPAY_REAL_001>",
+        "postTime": 1700000100001,
+        "title": "你已成功收款0.01元（<MEMO>）",
+        "text": "已转入余额 今日签到领商家积分>>",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "real_alipay_group_summary_negative",
+      "scenario": "ALIPAY_NON_PAYMENT",
+      "sourcePackageVersion": "12.12.6.8000",
+      "reviewed": true,
+      "expected": {
+        "matched": false,
+        "platform": null,
+        "direction": null,
+        "parseStatus": null,
+        "amount": null
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": 91129767,
+        "notificationTag": null,
+        "notificationKey": "<KEY_ALIPAY_SUMMARY>",
+        "postTime": 1700000100002,
+        "title": "新消息 GroupSummary",
+        "text": "你有一条新消息",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "real_alipay_income_002",
+      "scenario": "ALIPAY_MERCHANT_INCOME",
+      "sourcePackageVersion": "12.12.6.8000",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "0.02"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": -461052362,
+        "notificationTag": null,
+        "notificationKey": "<KEY_ALIPAY_REAL_002>",
+        "postTime": 1700000100003,
+        "title": "你已成功收款0.02元.",
+        "text": "已转入余额 做生意收钱提现免费>>",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "real_alipay_income_003",
+      "scenario": "ALIPAY_MERCHANT_INCOME",
+      "sourcePackageVersion": "12.12.6.8000",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "0.03"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": -461052347,
+        "notificationTag": null,
+        "notificationKey": "<KEY_ALIPAY_REAL_003>",
+        "postTime": 1700000100004,
+        "title": "你已成功收款0.03元.",
+        "text": "已转入余额 做生意收钱提现免费>>",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "real_wechat_clerk_income_001",
+      "scenario": "WECHAT_CLERK_INCOME",
+      "sourcePackageVersion": "8.0.76",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "WECHAT",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "0.01"
+      },
+      "raw": {
+        "packageName": "com.tencent.mm",
+        "notificationId": -124356843,
+        "notificationTag": null,
+        "notificationKey": "<KEY_WECHAT_REAL_001>",
+        "postTime": 1700000100005,
+        "title": "微信收款助手",
+        "text": "[店员消息]收款到账0.01元",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    }
+  ]
+}

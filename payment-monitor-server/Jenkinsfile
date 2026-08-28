@@ -1,0 +1,248 @@
+pipeline {
+    agent {
+        node {
+            label 'built-in'
+            customWorkspace '/opt/payment-monitor/jenkins-workspace/payment-monitor-deploy'
+        }
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 45, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    parameters {
+        string(name: 'SERVER_BRANCH', defaultValue: 'main', description: '服务端分支')
+        string(name: 'ADMIN_BRANCH', defaultValue: 'main', description: '管理端分支')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: '部署前运行后端和前端测试')
+        booleanParam(name: 'RESET_PRODUCTION_DATA', defaultValue: false, description: '清理支付监控生产 PostgreSQL、Redis 和 MinIO 数据卷')
+    }
+
+    environment {
+        DEPLOY_ROOT = '/opt/payment-monitor'
+        SERVER_REPOSITORY = 'https://github.com/xhulong/payment-monitor-server.git'
+        ADMIN_REPOSITORY = 'https://github.com/xhulong/payment-monitor-admin.git'
+        DEPLOY_ENV = '/opt/payment-monitor/config/.env.production'
+        COMPOSE_FILE = 'PaymentMonitorServer/deploy/docker-compose.ports.yml'
+        COMPOSE_PROJECT_NAME = 'payment-monitor'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                deleteDir()
+                dir('PaymentMonitorServer') {
+                    git branch: params.SERVER_BRANCH,
+                        credentialsId: 'github-payment-monitor',
+                        url: env.SERVER_REPOSITORY
+                }
+                dir('PaymentMonitorAdmin') {
+                    git branch: params.ADMIN_BRANCH,
+                        credentialsId: 'github-payment-monitor',
+                        url: env.ADMIN_REPOSITORY
+                }
+                sh '''
+                    set -eu
+                    echo "server_commit=$(git -C PaymentMonitorServer rev-parse HEAD)"
+                    echo "admin_commit=$(git -C PaymentMonitorAdmin rev-parse HEAD)"
+                '''
+            }
+        }
+
+        stage('Preflight') {
+            steps {
+                sh '''
+                    set -eu
+                    docker version
+                    docker compose version
+                    test -s "$DEPLOY_ENV"
+                    test -s /opt/payment-monitor/config/secrets/api-crypto-v2-public.pem
+                    test -s /opt/payment-monitor/config/secrets/api-crypto-v2-private.pem
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" config --quiet
+                '''
+            }
+        }
+
+        stage('Test') {
+            when {
+                expression { return params.RUN_TESTS }
+            }
+            parallel {
+                stage('Backend tests') {
+                    steps {
+                        sh '''
+                            set -eu
+                            test_docker_name="payment-monitor-test-docker-${BUILD_NUMBER}"
+                            test_network_name="payment-monitor-test-network-${BUILD_NUMBER}"
+                            test_docker_cache="payment-monitor-testcontainers-docker-cache"
+
+                            cleanup_test_docker() {
+                              docker rm -f "$test_docker_name" >/dev/null 2>&1 || true
+                              docker network rm "$test_network_name" >/dev/null 2>&1 || true
+                            }
+                            trap cleanup_test_docker EXIT INT TERM
+                            cleanup_test_docker
+
+                            # Testcontainers uses this isolated Docker daemon. It cannot see or
+                            # remove the production PostgreSQL, Redis, or MinIO volumes.
+                            docker network create "$test_network_name" >/dev/null
+                            docker run -d --rm --privileged \
+                              --name "$test_docker_name" \
+                              --network "$test_network_name" \
+                              --network-alias test-docker \
+                              -e DOCKER_TLS_CERTDIR= \
+                              -v "$test_docker_cache:/var/lib/docker" \
+                              docker:27-dind \
+                              --host=tcp://0.0.0.0:2375 \
+                              --host=unix:///var/run/docker.sock >/dev/null
+
+                            deadline=$(( $(date +%s) + 120 ))
+                            until docker exec "$test_docker_name" docker info >/dev/null 2>&1; do
+                              if [ "$(date +%s)" -ge "$deadline" ]; then
+                                docker logs "$test_docker_name"
+                                echo "Isolated Testcontainers Docker daemon did not become ready" >&2
+                                exit 1
+                              fi
+                              sleep 2
+                            done
+
+                            docker run --rm \
+                              --network "$test_network_name" \
+                              -e DOCKER_HOST=tcp://test-docker:2375 \
+                              -e TESTCONTAINERS_HOST_OVERRIDE=test-docker \
+                              -v ruoyi-maven-repo:/root/.m2 \
+                              -v "$PWD/PaymentMonitorServer:/workspace" \
+                              -w /workspace \
+                              eclipse-temurin:21-jdk-jammy \
+                              bash -lc '
+                                set -eu
+                                chmod +x mvnw
+                                ./mvnw \
+                                  -pl ruoyi-modules/ruoyi-payment \
+                                  -am \
+                                  -Dmaven.test.skip=false \
+                                  -Dtest.groups=dev,integration \
+                                  test
+
+                                for report in \
+                                  ruoyi-common/ruoyi-common-encrypt/target/surefire-reports/TEST-org.dromara.common.encrypt.v2.crypto.ApiCryptoV2ReplayGuardContainerTest.xml \
+                                  ruoyi-modules/ruoyi-payment/target/surefire-reports/TEST-org.dromara.payment.integration.PaymentInfrastructureContainerTest.xml \
+                                  ruoyi-modules/ruoyi-payment/target/surefire-reports/TEST-org.dromara.system.service.StepUpTokenStoreContainerTest.xml
+                                do
+                                  test -s "$report" || {
+                                    echo "Required integration test report is missing: $report" >&2
+                                    exit 1
+                                  }
+                                done
+                              '
+                        '''
+                    }
+                }
+                stage('Admin tests') {
+                    steps {
+                        sh '''
+                            set -eu
+                            docker run --rm \
+                              -v ruoyi-pnpm-store:/pnpm/store \
+                              -v "$PWD/PaymentMonitorAdmin:/workspace" \
+                              -w /workspace \
+                              node:22-alpine \
+                              sh -lc 'corepack enable && pnpm config set store-dir /pnpm/store && pnpm install --frozen-lockfile && pnpm test:payment'
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Build images') {
+            steps {
+                sh '''
+                    set -eu
+                    docker image inspect payment-monitor-backend:latest >/dev/null 2>&1 \
+                      && docker image tag payment-monitor-backend:latest payment-monitor-backend:rollback \
+                      || true
+                    docker image inspect payment-monitor-admin:latest >/dev/null 2>&1 \
+                      && docker image tag payment-monitor-admin:latest payment-monitor-admin:rollback \
+                      || true
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" build --pull
+                '''
+            }
+        }
+
+        stage('Reset production data') {
+            when {
+                expression { return params.RESET_PRODUCTION_DATA }
+            }
+            steps {
+                sh '''
+                    set -eu
+                    touch .production-data-reset-attempted
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" down --remove-orphans
+                    for volume in payment-monitor-postgres payment-monitor-redis payment-monitor-minio; do
+                      if docker volume inspect "$volume" >/dev/null 2>&1; then
+                        docker volume rm "$volume"
+                      fi
+                    done
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                    set -eu
+                    touch .deploy-attempted
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" up -d --remove-orphans
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh '''
+                    set -eu
+                    deadline=$(( $(date +%s) + 300 ))
+                    while :; do
+                      backend_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' payment-monitor-backend-1 2>/dev/null || true)"
+                      gateway_status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' payment-monitor-gateway-1 2>/dev/null || true)"
+                      if [ "$backend_status" = healthy ] && [ "$gateway_status" = healthy ]; then
+                        break
+                      fi
+                      if [ "$(date +%s)" -ge "$deadline" ]; then
+                        docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" ps
+                        docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" logs --tail=200 backend gateway
+                        exit 1
+                      fi
+                      sleep 5
+                    done
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" ps
+                    docker exec payment-monitor-gateway-1 wget -qO- http://127.0.0.1/ >/dev/null
+                '''
+            }
+        }
+    }
+
+    post {
+        failure {
+            sh '''
+                set +e
+                if { [ -f .deploy-attempted ] || [ -f .production-data-reset-attempted ]; } \
+                   && docker image inspect payment-monitor-backend:rollback >/dev/null 2>&1 \
+                   && docker image inspect payment-monitor-admin:rollback >/dev/null 2>&1; then
+                  BACKEND_IMAGE=payment-monitor-backend:rollback \
+                  ADMIN_IMAGE=payment-monitor-admin:rollback \
+                    docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" up -d --no-build
+                fi
+            '''
+        }
+        always {
+            sh '''
+                set +e
+                docker compose --env-file "$DEPLOY_ENV" -f "$COMPOSE_FILE" ps
+                docker image prune -f --filter "until=168h"
+            '''
+        }
+    }
+}

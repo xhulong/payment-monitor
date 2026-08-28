@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.integration.epay.mapper.ExternalOrderBindingMapper">
+    <insert id="insertOnConflict" parameterType="org.dromara.payment.integration.epay.domain.PmExternalOrderBinding">
+        insert into pm_external_order_binding (
+            id, merchant_id, integration_id, order_id, protocol, protocol_profile,
+            external_order_no, gateway_trade_no, pay_type, request_amount_minor,
+            notify_url, return_url, passthrough_param, credential_version,
+            notify_method, callback_policy, allowed_callback_hosts,
+            request_fingerprint, request_snapshot,
+            risk_status, risk_reason, created_at, updated_at
+        ) values (
+            #{id}, #{merchantId}, #{integrationId}, #{orderId}, #{protocol}, #{protocolProfile},
+            #{externalOrderNo}, #{gatewayTradeNo}, #{payType}, #{requestAmountMinor},
+            #{notifyUrl}, #{returnUrl}, #{passthroughParam}, #{credentialVersion},
+            #{notifyMethod}, #{callbackPolicy}, #{allowedCallbackHosts},
+            #{requestFingerprint},
+            #{requestSnapshot,typeHandler=org.dromara.payment.mybatis.JsonbStringTypeHandler},
+            #{riskStatus}, #{riskReason}, #{createdAt}, #{updatedAt}
+        ) on conflict do nothing
+    </insert>
+</mapper>

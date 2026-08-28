@@ -1,0 +1,16 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: platform-operations
+  group_by: [alertname, severity]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: platform-operations
+
+# Replace the empty receiver with the production email, chat or incident
+# integration before opening public registration. Keeping Alertmanager internal
+# still provides grouping, silencing and alert-state history during local drills.

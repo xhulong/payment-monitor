@@ -1,0 +1,221 @@
+{
+  "schema": 1,
+  "cases": [
+    {
+      "caseId": "wechat_clerk_income",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "WECHAT",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "0.88"
+      },
+      "raw": {
+        "packageName": "com.tencent.mm",
+        "notificationId": 1,
+        "notificationTag": "<TAG_A>",
+        "notificationKey": "<KEY_A>",
+        "postTime": 1700000000001,
+        "title": "微信收款助手",
+        "text": "店员收款成功，顾客已支付0.88元，已存入经营账户",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "wechat_expense_order_number",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "WECHAT",
+        "direction": "EXPENSE",
+        "parseStatus": "PARSED",
+        "amount": "12.30"
+      },
+      "raw": {
+        "packageName": "com.tencent.mm",
+        "notificationId": 2,
+        "notificationTag": "<TAG_B>",
+        "notificationKey": "<KEY_B>",
+        "postTime": 1700000000002,
+        "title": "微信支付",
+        "text": "订单号202607161234567890，向商家付款成功￥12.30",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "alipay_clerk_income",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "6.66"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": 3,
+        "notificationTag": "<TAG_C>",
+        "notificationKey": "<KEY_C>",
+        "postTime": 1700000000003,
+        "title": "店员通收款到账",
+        "text": "通过扫码向你付款6.66元，已转入余额",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "alipay_amount_missing",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "AMOUNT_NOT_FOUND",
+        "amount": null
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": 4,
+        "notificationTag": "<TAG_D>",
+        "notificationKey": "<KEY_D>",
+        "postTime": 1700000000004,
+        "title": "店员通",
+        "text": "收款到账，点击查看详情",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "alipay_ambiguous",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "UNKNOWN",
+        "parseStatus": "AMBIGUOUS",
+        "amount": "10.00"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": 5,
+        "notificationTag": "<TAG_E>",
+        "notificationKey": "<KEY_E>",
+        "postTime": 1700000000005,
+        "title": "支付宝",
+        "text": "成功收款后支付成功10.00元",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "wechat_chat_negative",
+      "reviewed": true,
+      "expected": {
+        "matched": false,
+        "platform": null,
+        "direction": null,
+        "parseStatus": null,
+        "amount": null
+      },
+      "raw": {
+        "packageName": "com.tencent.mm",
+        "notificationId": 6,
+        "notificationTag": "<TAG_F>",
+        "notificationKey": "<KEY_F>",
+        "postTime": 1700000000006,
+        "title": "<USER_A>",
+        "text": "晚上一起吃饭吗？",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "alipay_clock_and_long_id",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "ALIPAY",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "3.21"
+      },
+      "raw": {
+        "packageName": "com.eg.android.AlipayGphone",
+        "notificationId": 7,
+        "notificationTag": "<TAG_G>",
+        "notificationKey": "<KEY_G>",
+        "postTime": 1700000000007,
+        "title": "成功收款",
+        "text": "交易号202607161234567890，时间12:30，成功收款￥3.21",
+        "bigText": null,
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    },
+    {
+      "caseId": "wechat_income_big_text",
+      "reviewed": true,
+      "expected": {
+        "matched": true,
+        "platform": "WECHAT",
+        "direction": "INCOME",
+        "parseStatus": "PARSED",
+        "amount": "88.66"
+      },
+      "raw": {
+        "packageName": "com.tencent.mm",
+        "notificationId": 8,
+        "notificationTag": "<TAG_H>",
+        "notificationKey": "<KEY_H>",
+        "postTime": 1700000000008,
+        "title": "微信收款商业版",
+        "text": "查看收款详情",
+        "bigText": "微信收款商业版成功收款88.66元",
+        "textLines": [],
+        "ticker": null,
+        "subText": null,
+        "infoText": null,
+        "summaryText": null,
+        "extras": {}
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:usesCleartextTraffic="true"
+        tools:replace="android:usesCleartextTraffic">
+        <activity
+            android:name=".UiTestHostActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.PaymentNotificationMonitor">
+            <!--
+              MIUI only allows ActivityScenario to launch this test host when it is
+              registered as a Debug launcher Activity and background pop-up AppOp
+              10021 is enabled by scripts/run-phase-i-ui-tests.ps1.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".debug.DebugFixtureReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.paymentmonitor.DEBUG_PAIR" />
+                <action android:name="com.example.paymentmonitor.DEBUG_FIXTURE" />
+                <action android:name="com.example.paymentmonitor.DEBUG_SYNC" />
+                <action android:name="com.example.paymentmonitor.DEBUG_HEARTBEAT" />
+                <action android:name="com.example.paymentmonitor.DEBUG_START_MONITORING" />
+                <action android:name="com.example.paymentmonitor.DEBUG_STOP_MONITORING" />
+                <action android:name="com.example.paymentmonitor.DEBUG_CAPTURE_START" />
+                <action android:name="com.example.paymentmonitor.DEBUG_CAPTURE_STOP" />
+                <action android:name="com.example.paymentmonitor.DEBUG_STATE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

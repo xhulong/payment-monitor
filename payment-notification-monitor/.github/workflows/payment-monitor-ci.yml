@@ -1,0 +1,20 @@
+name: payment-monitor-android
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: chmod +x gradlew
+      - run: yes | sdkmanager --licenses >/dev/null
+      - run: sdkmanager "platforms;android-35" "system-images;android-35;aosp_atd;x86_64"
+      - run: ./gradlew testDebugUnitTest assembleDebug assembleRelease
+      - run: ./gradlew pixel2Api35DebugAndroidTest

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.integration.epay.mapper.ProtocolCallbackOutboxMapper">
+    <resultMap id="CallbackResult" type="org.dromara.payment.integration.epay.domain.PmProtocolCallbackOutbox">
+        <id property="id" column="id"/>
+        <result property="deliveryId" column="delivery_id"/>
+        <result property="eventId" column="event_id"/>
+        <result property="merchantId" column="merchant_id"/>
+        <result property="integrationId" column="integration_id"/>
+        <result property="bindingId" column="binding_id"/>
+        <result property="callbackKind" column="callback_kind"/>
+        <result property="targetUrl" column="target_url"/>
+        <result property="requestMethod" column="request_method"/>
+        <result property="contentType" column="content_type"/>
+        <result property="credentialVersion" column="credential_version"/>
+        <result property="unsignedParams" column="unsigned_params" typeHandler="org.dromara.payment.mybatis.JsonbStringTypeHandler"/>
+        <result property="status" column="status"/>
+        <result property="attemptCount" column="attempt_count"/>
+        <result property="nextAttemptAt" column="next_attempt_at"/>
+        <result property="lockedAt" column="locked_at"/>
+        <result property="deliveredAt" column="delivered_at"/>
+        <result property="lastHttpStatus" column="last_http_status"/>
+        <result property="lastResponse" column="last_response"/>
+        <result property="lastError" column="last_error"/>
+        <result property="strictAcknowledged" column="strict_acknowledged"/>
+        <result property="replayOfId" column="replay_of_id"/>
+        <result property="replayReason" column="replay_reason"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <insert id="insertOnConflict" parameterType="org.dromara.payment.integration.epay.domain.PmProtocolCallbackOutbox">
+        insert into pm_protocol_callback_outbox (
+            id, delivery_id, event_id, merchant_id, integration_id, binding_id,
+            callback_kind, target_url, request_method, content_type, credential_version,
+            unsigned_params, status, attempt_count, next_attempt_at, locked_at,
+            delivered_at, last_http_status, last_response, last_error,
+            strict_acknowledged, replay_of_id, replay_reason, created_at, updated_at
+        ) values (
+            #{id}, #{deliveryId}, #{eventId}, #{merchantId}, #{integrationId}, #{bindingId},
+            #{callbackKind}, #{targetUrl}, #{requestMethod}, #{contentType}, #{credentialVersion},
+            #{unsignedParams,typeHandler=org.dromara.payment.mybatis.JsonbStringTypeHandler},
+            #{status}, #{attemptCount}, #{nextAttemptAt}, #{lockedAt}, #{deliveredAt},
+            #{lastHttpStatus}, #{lastResponse}, #{lastError}, #{strictAcknowledged},
+            #{replayOfId}, #{replayReason}, #{createdAt}, #{updatedAt}
+        ) on conflict do nothing
+    </insert>
+    <select id="claimDue" resultMap="CallbackResult">
+        update pm_protocol_callback_outbox o
+        set status = 'DELIVERING', locked_at = #{now}, updated_at = #{now}
+        from (
+            select id from pm_protocol_callback_outbox
+            where (status in ('PENDING', 'RETRYING') and next_attempt_at &lt;= #{now})
+               or (status = 'DELIVERING' and locked_at &lt;= #{lockCutoff})
+            order by next_attempt_at asc, id asc
+            for update skip locked limit #{limit}
+        ) due
+        where o.id = due.id
+        returning o.*
+    </select>
+</mapper>

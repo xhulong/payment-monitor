@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.mapper.PaymentOrderMapper">
+
+    <insert id="insertOnConflict" parameterType="org.dromara.payment.domain.PmPaymentOrder">
+        insert into pm_payment_order (
+            id, merchant_id, merchant_order_no, platform, qr_asset_id,
+            requested_amount_minor, payable_amount_minor, amount_offset_minor,
+            currency, status, public_token, subject, customer_note,
+            matched_event_id, transaction_id, confirmation_status, confirmed_at,
+            confirmed_by, confirmation_source, confirmation_note, version,
+            created_at, expires_at, paid_at, cancelled_at, updated_at
+        ) values (
+            #{id}, #{merchantId}, #{merchantOrderNo}, #{platform}, #{qrAssetId},
+            #{requestedAmountMinor}, #{payableAmountMinor}, #{amountOffsetMinor},
+            #{currency}, #{status}, #{publicToken}, #{subject}, #{customerNote},
+            #{matchedEventId}, #{transactionId}, #{confirmationStatus}, #{confirmedAt},
+            #{confirmedBy}, #{confirmationSource}, #{confirmationNote}, #{version},
+            #{createdAt}, #{expiresAt}, #{paidAt}, #{cancelledAt}, #{updatedAt}
+        )
+        on conflict do nothing
+    </insert>
+
+    <select id="selectMatchCandidatesForUpdate"
+            resultType="org.dromara.payment.domain.PmPaymentOrder">
+        select *
+        from pm_payment_order
+        where merchant_id = #{merchantId}
+          and platform = #{platform}
+          and payable_amount_minor = #{amountMinor}
+          and status in ('PENDING', 'CONFLICT')
+          and created_at &lt;= #{eventTime}
+          and expires_at + interval '120 seconds' &gt;= #{eventTime}
+        order by created_at asc
+        for update
+    </select>
+
+    <select id="selectByIdForUpdate"
+            resultType="org.dromara.payment.domain.PmPaymentOrder">
+        select * from pm_payment_order
+        where id = #{id} and merchant_id = #{merchantId}
+        for update
+    </select>
+</mapper>

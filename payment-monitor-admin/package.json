@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "lulupay-admin",
+  "version": "6.0.0-BETA",
+  "description": "LuLuPay 后台管理系统",
+  "license": "MIT",
+  "author": "LionLi",
+  "packageManager": "pnpm@10.28.1",
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/JavaLionLi/plus-ui.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vite build --mode production",
+    "build:dev": "vite build --mode development",
+    "build:prod": "vite build --mode production",
+    "dev": "vite serve --mode development",
+    "fmt": "oxfmt .",
+    "lint": "oxlint src",
+    "lint:fix": "oxlint --fix src",
+    "preview": "vite preview",
+    "test:payment": "vitest run --config vitest.config.ts src/api/payment/pairing.test.ts src/api/payment/time.test.ts src/store/modules/merchant.test.ts src/hooks/payment/useMerchantScope.test.ts src/views/payment/onboarding/onboarding-state.test.ts src/views/payment/order/match-candidates.test.ts src/views/payment/sensitive-operation/flow.test.ts src/views/payment/integration/integration-state.test.ts src/views/account/security/mfa-setup.test.ts src/utils/payment-step-up.test.ts src/utils/notice-navigation.test.ts src/utils/merchant-role.test.ts src/utils/payment-routes.test.ts src/utils/request-path.test.ts src/utils/nginx-public-payment-route.test.ts",
+    "test:public-site": "vitest run --config vitest.config.ts src/router/public-routes.test.ts src/views/public/release-utils.test.ts src/views/public/site-content.test.ts && playwright test tests/e2e/public-site.spec.ts",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "2.3.2",
+    "@highlightjs/vue-plugin": "2.1.2",
+    "@iconify/vue": "^5.0.1",
+    "@vueuse/core": "14.3.0",
+    "@wangeditor-next/editor": "5.7.13",
+    "@wangeditor-next/editor-for-vue": "5.1.14",
+    "animate.css": "4.1.1",
+    "await-to-js": "3.0.0",
+    "axios": "1.18.1",
+    "echarts": "6.1.0",
+    "element-plus": "2.14.2",
+    "highlight.js": "11.11.1",
+    "image-conversion": "2.1.1",
+    "nprogress": "0.2.0",
+    "pinia": "3.0.4",
+    "qrcode": "1.5.4",
+    "vue": "3.5.39",
+    "vue-cropper": "1.1.4",
+    "vue-i18n": "11.4.6",
+    "vue-json-pretty": "2.6.0",
+    "vue-router": "5.1.0",
+    "vue-types": "7.0.0",
+    "vxe-table": "4.19.21"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.55.0",
+    "@types/node": "^26.0.1",
+    "@types/nprogress": "0.2.3",
+    "@types/qrcode": "1.5.6",
+    "@unocss/preset-attributify": "66.7.3",
+    "@unocss/preset-wind3": "66.7.3",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/compiler-sfc": "3.5.39",
+    "autoprefixer": "10.5.2",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.71.0",
+    "oxlint-tsgolint": "^0.23.0",
+    "sass": "1.101.0",
+    "typescript": "^6.0.3",
+    "unocss": "66.7.3",
+    "unplugin-auto-import": "21.0.0",
+    "unplugin-vue-components": "32.1.0",
+    "unplugin-vue-setup-extend-plus": "1.0.1",
+    "vite": "^8.1.0",
+    "vite-plugin-svg-icons-ng": "^1.9.1",
+    "vitest": "4.1.9",
+    "vue-tsc": "^3.3.5"
+  },
+  "browserslist": [
+    "Chrome >= 87",
+    "Edge >= 88",
+    "Safari >= 14",
+    "Firefox >= 78"
+  ],
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=10.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "es5-ext",
+      "esbuild"
+    ]
+  }
+}

@@ -1,0 +1,586 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="renderer" content="webkit" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>%VITE_APP_TITLE%</title>
+    <!--[if lt IE 11]>
+      <script>
+        window.location.href = '/ie.html';
+      </script>
+    <![endif]-->
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+
+      html,
+      body,
+      #app {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: #050817;
+      }
+
+      #loader-wrapper {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+        z-index: 999999;
+        overflow: hidden;
+        color: #eef4ff;
+        background:
+          radial-gradient(circle at 50% 42%, rgb(83 111 255 / 22%), transparent 30%),
+          radial-gradient(circle at 18% 18%, rgb(77 222 255 / 11%), transparent 26%),
+          radial-gradient(circle at 82% 76%, rgb(135 80 255 / 12%), transparent 30%),
+          linear-gradient(145deg, #040713 0%, #080d24 48%, #050817 100%);
+        isolation: isolate;
+      }
+
+      #loader-wrapper::before {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background-image:
+          linear-gradient(rgb(111 207 255 / 5%) 1px, transparent 1px),
+          linear-gradient(90deg, rgb(111 207 255 / 5%) 1px, transparent 1px);
+        background-size: 46px 46px;
+        content: '';
+        -webkit-mask-image: radial-gradient(circle at center, #000 0%, transparent 72%);
+        mask-image: radial-gradient(circle at center, #000 0%, transparent 72%);
+        animation: grid-drift 9s linear infinite;
+      }
+
+      #loader-wrapper::after {
+        position: absolute;
+        top: -35%;
+        left: 50%;
+        width: 1px;
+        height: 170%;
+        background: linear-gradient(transparent, rgb(89 222 255 / 55%), transparent);
+        box-shadow: 0 0 36px 10px rgb(89 222 255 / 8%);
+        content: '';
+        opacity: 0.55;
+        transform: rotate(28deg);
+        animation: scan-sweep 5.8s ease-in-out infinite;
+      }
+
+      .loader-ambient {
+        position: absolute;
+        width: 36vw;
+        height: 36vw;
+        min-width: 320px;
+        min-height: 320px;
+        border: 1px solid rgb(101 212 255 / 7%);
+        border-radius: 50%;
+        box-shadow:
+          0 0 0 72px rgb(101 212 255 / 2.5%),
+          0 0 0 144px rgb(117 83 255 / 2%);
+        animation: ambient-breathe 4.6s ease-in-out infinite;
+      }
+
+      .loader-particle {
+        position: absolute;
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: #78e5ff;
+        box-shadow: 0 0 12px 2px rgb(120 229 255 / 65%);
+        opacity: 0;
+        animation: particle-float 4.8s ease-in-out infinite;
+      }
+
+      .loader-particle:nth-of-type(1) {
+        top: 24%;
+        left: 22%;
+        animation-delay: -1.1s;
+      }
+
+      .loader-particle:nth-of-type(2) {
+        top: 68%;
+        left: 28%;
+        animation-delay: -3.2s;
+      }
+
+      .loader-particle:nth-of-type(3) {
+        top: 31%;
+        right: 20%;
+        animation-delay: -2.3s;
+      }
+
+      .loader-particle:nth-of-type(4) {
+        right: 27%;
+        bottom: 20%;
+        animation-delay: -0.4s;
+      }
+
+      .loader-console {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: min(440px, calc(100vw - 48px));
+        text-align: center;
+      }
+
+      .loader-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 22px;
+        color: rgb(176 211 255 / 72%);
+        font-weight: 600;
+        font-size: 10px;
+        line-height: 1;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+      }
+
+      .loader-signal {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #66edc7;
+        box-shadow: 0 0 12px 2px rgb(102 237 199 / 55%);
+        animation: signal-pulse 1.45s ease-in-out infinite;
+      }
+
+      .loader-visual {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 182px;
+        height: 182px;
+        margin-bottom: 30px;
+      }
+
+      .loader-orbit {
+        position: absolute;
+        border: 1px solid rgb(127 208 255 / 22%);
+        border-radius: 50%;
+      }
+
+      .loader-orbit::before,
+      .loader-orbit::after {
+        position: absolute;
+        top: 50%;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #6fe5ff;
+        box-shadow: 0 0 14px 3px rgb(111 229 255 / 52%);
+        content: '';
+      }
+
+      .loader-orbit::before {
+        left: -3px;
+      }
+
+      .loader-orbit::after {
+        right: -3px;
+        opacity: 0.38;
+      }
+
+      .loader-orbit--outer {
+        inset: 2px;
+        border-top-color: rgb(139 102 255 / 66%);
+        border-right-color: transparent;
+        border-bottom-color: rgb(91 226 255 / 48%);
+        transform: rotate(-18deg);
+        animation: orbit-spin 4.8s linear infinite;
+      }
+
+      .loader-orbit--middle {
+        inset: 18px;
+        border-top-color: transparent;
+        border-right-color: rgb(96 230 255 / 56%);
+        border-left-color: rgb(143 116 255 / 42%);
+        transform: rotate(37deg);
+        animation: orbit-spin-reverse 3.6s linear infinite;
+      }
+
+      .loader-orbit--inner {
+        inset: 35px;
+        border-color: rgb(113 224 255 / 15%);
+        border-top-color: rgb(113 224 255 / 72%);
+        animation: orbit-spin 2.4s linear infinite;
+      }
+
+      .loader-core {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 82px;
+        height: 82px;
+        overflow: hidden;
+        border: 1px solid rgb(165 225 255 / 34%);
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgb(117 94 255 / 92%), rgb(42 207 220 / 86%));
+        box-shadow:
+          0 0 36px rgb(69 189 255 / 32%),
+          inset 0 1px 0 rgb(255 255 255 / 34%);
+        transform: rotate(45deg);
+        animation: core-breathe 2.6s ease-in-out infinite;
+      }
+
+      .loader-core::before {
+        position: absolute;
+        inset: -50%;
+        background: linear-gradient(105deg, transparent 42%, rgb(255 255 255 / 48%) 50%, transparent 58%);
+        content: '';
+        transform: translateX(-70%);
+        animation: core-shine 3s ease-in-out infinite;
+      }
+
+      .loader-logo {
+        position: relative;
+        z-index: 1;
+        width: 52px;
+        height: 52px;
+        filter: drop-shadow(0 3px 10px rgb(16 38 89 / 28%));
+        transform: rotate(-45deg);
+      }
+
+      .loader-console h1 {
+        margin: 0;
+        color: #f7f9ff;
+        font-weight: 750;
+        font-size: 32px;
+        line-height: 1.1;
+        letter-spacing: -0.04em;
+        text-shadow: 0 0 28px rgb(111 196 255 / 25%);
+      }
+
+      .loader-console h1 span {
+        background: linear-gradient(90deg, #ffffff 20%, #8feaff 58%, #b7a7ff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+
+      .loader-message {
+        min-height: 24px;
+        margin: 10px 0 25px;
+        color: rgb(208 222 247 / 76%);
+        font-size: 14px;
+        letter-spacing: 0.08em;
+      }
+
+      .loader-dots::after {
+        display: inline-block;
+        width: 1.4em;
+        overflow: hidden;
+        vertical-align: bottom;
+        content: '...';
+        animation: loading-dots 1.3s steps(4, end) infinite;
+      }
+
+      .loader-progress {
+        position: relative;
+        width: min(320px, 76vw);
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgb(144 183 255 / 12%);
+        box-shadow: inset 0 0 0 1px rgb(144 183 255 / 7%);
+      }
+
+      .loader-progress::before {
+        position: absolute;
+        inset: 0;
+        width: 42%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, #81a8ff 42%, #6ff0e6 78%, transparent);
+        box-shadow: 0 0 16px rgb(101 226 255 / 65%);
+        content: '';
+        transform: translateX(-110%);
+        animation: progress-travel 1.8s ease-in-out infinite;
+      }
+
+      .loader-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: min(320px, 76vw);
+        margin-top: 10px;
+        color: rgb(157 183 224 / 48%);
+        font-weight: 600;
+        font-size: 9px;
+        line-height: 1;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .loader-corner {
+        position: absolute;
+        width: 58px;
+        height: 58px;
+        border-color: rgb(102 216 255 / 18%);
+        pointer-events: none;
+      }
+
+      .loader-corner--tl {
+        top: 26px;
+        left: 26px;
+        border-top: 1px solid;
+        border-left: 1px solid;
+      }
+
+      .loader-corner--br {
+        right: 26px;
+        bottom: 26px;
+        border-right: 1px solid;
+        border-bottom: 1px solid;
+      }
+
+      @keyframes orbit-spin {
+        to {
+          transform: rotate(342deg);
+        }
+      }
+
+      @keyframes orbit-spin-reverse {
+        to {
+          transform: rotate(-323deg);
+        }
+      }
+
+      @keyframes core-breathe {
+        0%,
+        100% {
+          box-shadow:
+            0 0 30px rgb(69 189 255 / 24%),
+            inset 0 1px 0 rgb(255 255 255 / 34%);
+          transform: rotate(45deg) scale(0.96);
+        }
+
+        50% {
+          box-shadow:
+            0 0 48px rgb(69 189 255 / 42%),
+            inset 0 1px 0 rgb(255 255 255 / 42%);
+          transform: rotate(45deg) scale(1.04);
+        }
+      }
+
+      @keyframes core-shine {
+        0%,
+        28% {
+          transform: translateX(-70%);
+        }
+
+        70%,
+        100% {
+          transform: translateX(70%);
+        }
+      }
+
+      @keyframes progress-travel {
+        0% {
+          transform: translateX(-110%);
+        }
+
+        100% {
+          transform: translateX(350%);
+        }
+      }
+
+      @keyframes loading-dots {
+        0% {
+          width: 0;
+        }
+
+        100% {
+          width: 1.4em;
+        }
+      }
+
+      @keyframes signal-pulse {
+        0%,
+        100% {
+          opacity: 0.5;
+          transform: scale(0.75);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes grid-drift {
+        to {
+          background-position: 46px 46px;
+        }
+      }
+
+      @keyframes scan-sweep {
+        0%,
+        100% {
+          opacity: 0;
+          transform: translateX(-38vw) rotate(28deg);
+        }
+
+        24%,
+        74% {
+          opacity: 0.55;
+        }
+
+        50% {
+          transform: translateX(38vw) rotate(28deg);
+        }
+      }
+
+      @keyframes ambient-breathe {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.04);
+        }
+      }
+
+      @keyframes particle-float {
+        0%,
+        100% {
+          opacity: 0;
+          transform: translateY(18px) scale(0.6);
+        }
+
+        35%,
+        72% {
+          opacity: 0.75;
+        }
+
+        60% {
+          transform: translateY(-20px) scale(1);
+        }
+      }
+
+      @media (max-width: 640px) {
+        .loader-visual {
+          width: 158px;
+          height: 158px;
+          margin-bottom: 26px;
+        }
+
+        .loader-orbit--middle {
+          inset: 16px;
+        }
+
+        .loader-orbit--inner {
+          inset: 31px;
+        }
+
+        .loader-core {
+          width: 72px;
+          height: 72px;
+          border-radius: 21px;
+        }
+
+        .loader-logo {
+          width: 46px;
+          height: 46px;
+        }
+
+        .loader-console h1 {
+          font-size: 28px;
+        }
+
+        .loader-corner {
+          display: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #loader-wrapper *,
+        #loader-wrapper::before,
+        #loader-wrapper::after {
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="app">
+      <div id="loader-wrapper" role="status" aria-live="polite" aria-label="LuLuPay 正在加载">
+        <div class="loader-ambient" aria-hidden="true"></div>
+        <i class="loader-particle" aria-hidden="true"></i>
+        <i class="loader-particle" aria-hidden="true"></i>
+        <i class="loader-particle" aria-hidden="true"></i>
+        <i class="loader-particle" aria-hidden="true"></i>
+        <i class="loader-corner loader-corner--tl" aria-hidden="true"></i>
+        <i class="loader-corner loader-corner--br" aria-hidden="true"></i>
+
+        <main class="loader-console">
+          <div class="loader-eyebrow">
+            <span class="loader-signal" aria-hidden="true"></span>
+            Secure system boot
+          </div>
+
+          <div class="loader-visual" aria-hidden="true">
+            <div class="loader-orbit loader-orbit--outer"></div>
+            <div class="loader-orbit loader-orbit--middle"></div>
+            <div class="loader-orbit loader-orbit--inner"></div>
+            <div class="loader-core">
+              <svg class="loader-logo" viewBox="0 0 64 64" fill="none">
+                <path
+                  d="M18 15V43C18 47.4183 21.5817 51 26 51H38"
+                  stroke="white"
+                  stroke-width="7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M34 13V35C34 39.4183 37.5817 43 42 43H49"
+                  stroke="white"
+                  stroke-width="7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  opacity="0.78"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <h1><span>LuLuPay</span></h1>
+          <p class="loader-message">
+            正在建立安全连接
+            <span class="loader-dots"></span>
+          </p>
+          <div class="loader-progress" aria-hidden="true"></div>
+          <div class="loader-meta" aria-hidden="true">
+            <span>Identity</span>
+            <span>Sync</span>
+            <span>Ready</span>
+          </div>
+        </main>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

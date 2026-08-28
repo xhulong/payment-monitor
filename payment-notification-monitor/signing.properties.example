@@ -1,0 +1,6 @@
+# Copy this file to signing.properties and fill in a private release keystore.
+# signing.properties and the keystore are ignored by Git.
+storeFile=../certs/payment-monitor-release-v1.jks
+storePassword=replace-me
+keyAlias=payment-monitor
+keyPassword=replace-me

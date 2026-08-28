@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.mapper.WebhookOutboxMapper">
+    <resultMap id="WebhookOutboxResult" type="org.dromara.payment.domain.PmWebhookOutbox">
+        <id property="id" column="id"/>
+        <result property="deliveryId" column="delivery_id"/>
+        <result property="eventId" column="event_id"/>
+        <result property="schemaVersion" column="schema_version"/>
+        <result property="merchantId" column="merchant_id"/>
+        <result property="endpointId" column="endpoint_id"/>
+        <result property="aggregateType" column="aggregate_type"/>
+        <result property="aggregateId" column="aggregate_id"/>
+        <result property="eventType" column="event_type"/>
+        <result property="payload" column="payload"
+                typeHandler="org.dromara.payment.mybatis.JsonbStringTypeHandler"/>
+        <result property="status" column="status"/>
+        <result property="attemptCount" column="attempt_count"/>
+        <result property="nextAttemptAt" column="next_attempt_at"/>
+        <result property="lockedAt" column="locked_at"/>
+        <result property="deliveredAt" column="delivered_at"/>
+        <result property="lastHttpStatus" column="last_http_status"/>
+        <result property="lastError" column="last_error"/>
+        <result property="replayOfDeliveryId" column="replay_of_delivery_id"/>
+        <result property="replayReason" column="replay_reason"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insertOnConflict" parameterType="org.dromara.payment.domain.PmWebhookOutbox">
+        insert into pm_webhook_outbox (
+            id, delivery_id, event_id, schema_version, merchant_id, endpoint_id, aggregate_type,
+            aggregate_id, event_type, payload, status, attempt_count,
+            next_attempt_at, locked_at, delivered_at, last_http_status,
+            last_error, replay_of_delivery_id, replay_reason, created_at, updated_at
+        ) values (
+            #{id}, #{deliveryId}, #{eventId}, #{schemaVersion}, #{merchantId}, #{endpointId}, #{aggregateType},
+            #{aggregateId}, #{eventType},
+            #{payload,typeHandler=org.dromara.payment.mybatis.JsonbStringTypeHandler},
+            #{status}, #{attemptCount}, #{nextAttemptAt}, #{lockedAt},
+            #{deliveredAt}, #{lastHttpStatus}, #{lastError},
+            #{replayOfDeliveryId}, #{replayReason}, #{createdAt}, #{updatedAt}
+        )
+        on conflict do nothing
+    </insert>
+
+    <select id="claimDue" resultMap="WebhookOutboxResult">
+        update pm_webhook_outbox o
+        set status = 'DELIVERING',
+            locked_at = #{now},
+            updated_at = #{now}
+        from (
+            select id
+            from pm_webhook_outbox
+            where (
+                status in ('PENDING', 'RETRYING')
+                and next_attempt_at &lt;= #{now}
+            ) or (
+                status = 'DELIVERING'
+                and locked_at &lt;= #{lockCutoff}
+            )
+            order by next_attempt_at asc, id asc
+            for update skip locked
+            limit #{limit}
+        ) due
+        where o.id = due.id
+        returning o.*
+    </select>
+</mapper>

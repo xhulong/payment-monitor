@@ -1,0 +1,579 @@
+pipeline {
+    agent {
+        node {
+            label 'built-in'
+        }
+    }
+
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 75, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        skipDefaultCheckout(true)
+    }
+
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['STATUS', 'VERIFY', 'DEPLOY', 'BACKUP', 'RESTART', 'ROLLBACK'],
+            description: '发布管理操作'
+        )
+        booleanParam(
+            name: 'RUN_TESTS',
+            defaultValue: true,
+            description: 'DEPLOY 前运行后端支付测试和管理端测试/类型检查/lint'
+        )
+        choice(
+            name: 'RESTART_SERVICE',
+            choices: ['all', 'backend', 'gateway'],
+            description: 'RESTART 操作的目标服务'
+        )
+        string(
+            name: 'TARGET_RELEASE',
+            defaultValue: '',
+            description: 'ROLLBACK 目标发布目录名，例如 jenkins-12-20260803-203000'
+        )
+    }
+
+    environment {
+        DEPLOY_ROOT = '/opt/payment-monitor'
+        DEPLOY_ENV = '/opt/payment-monitor/config/.env.production'
+        SERVER_REPOSITORY = 'file:///opt/payment-monitor/git/payment-monitor-server.git'
+        ADMIN_REPOSITORY = 'file:///opt/payment-monitor/git/payment-monitor-admin.git'
+        COMPOSE_PROJECT_NAME = 'payment-monitor'
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.ACTION}"
+                    env.OPERATION_TIME = sh(
+                        script: 'date +%Y%m%d-%H%M%S',
+                        returnStdout: true
+                    ).trim()
+                    env.PREVIOUS_RELEASE = sh(
+                        script: 'readlink -f /opt/payment-monitor/current 2>/dev/null || true',
+                        returnStdout: true
+                    ).trim()
+
+                    if (params.ACTION == 'DEPLOY') {
+                        env.RELEASE_ID = "jenkins-${env.BUILD_NUMBER}-${env.OPERATION_TIME}"
+                        env.RELEASE_DIR = "${env.DEPLOY_ROOT}/releases/${env.RELEASE_ID}"
+                        env.BACKEND_IMAGE = "payment-monitor-backend:${env.RELEASE_ID}"
+                        env.ADMIN_IMAGE = "payment-monitor-admin:${env.RELEASE_ID}"
+                    }
+
+                    if (params.ACTION == 'ROLLBACK') {
+                        if (!params.TARGET_RELEASE?.trim()) {
+                            error('ROLLBACK 必须填写 TARGET_RELEASE')
+                        }
+                        if (!(params.TARGET_RELEASE ==~ /[A-Za-z0-9._-]+/)) {
+                            error('TARGET_RELEASE 包含非法字符')
+                        }
+                        env.TARGET_RELEASE_DIR =
+                            "${env.DEPLOY_ROOT}/releases/${params.TARGET_RELEASE}"
+                    }
+
+                    currentBuild.description =
+                        "action=${params.ACTION}, previous=${env.PREVIOUS_RELEASE ?: 'none'}"
+                }
+            }
+        }
+
+        stage('Status') {
+            when {
+                expression { params.ACTION == 'STATUS' }
+            }
+            steps {
+                sh '''
+                    set -eu
+                    echo "current_release=$(readlink -f "$DEPLOY_ROOT/current" 2>/dev/null || true)"
+                    echo "--- containers ---"
+                    docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' \
+                      | grep -E 'NAMES|payment-monitor'
+                    echo "--- managed releases ---"
+                    find "$DEPLOY_ROOT/releases" -mindepth 2 -maxdepth 2 \
+                      -name .release.env -printf '%h\n' 2>/dev/null \
+                      | sort -r | head -20
+                    echo "--- disk ---"
+                    df -h "$DEPLOY_ROOT"
+                '''
+            }
+        }
+
+        stage('Checkout release sources') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
+            }
+            steps {
+                sh '''
+                    set -euo pipefail
+                    test ! -e "$RELEASE_DIR"
+                    mkdir -p "$RELEASE_DIR"
+                    git clone --single-branch --branch main \
+                      "$SERVER_REPOSITORY" "$RELEASE_DIR/PaymentMonitorServer"
+                    git clone --single-branch --branch main \
+                      "$ADMIN_REPOSITORY" "$RELEASE_DIR/PaymentMonitorAdmin"
+                    git -C "$RELEASE_DIR/PaymentMonitorServer" status --short
+                    git -C "$RELEASE_DIR/PaymentMonitorAdmin" status --short
+                    test -z "$(git -C "$RELEASE_DIR/PaymentMonitorServer" status --short)"
+                    test -z "$(git -C "$RELEASE_DIR/PaymentMonitorAdmin" status --short)"
+                '''
+                script {
+                    env.SERVER_COMMIT = sh(
+                        script: 'git -C "$RELEASE_DIR/PaymentMonitorServer" rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.ADMIN_COMMIT = sh(
+                        script: 'git -C "$RELEASE_DIR/PaymentMonitorAdmin" rev-parse HEAD',
+                        returnStdout: true
+                    ).trim()
+                    currentBuild.description =
+                        "deploy=${env.RELEASE_ID}, server=${env.SERVER_COMMIT.take(8)}, admin=${env.ADMIN_COMMIT.take(8)}"
+                }
+            }
+        }
+
+        stage('Preflight') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
+            }
+            steps {
+                sh '''
+                    set -euo pipefail
+                    test -s "$DEPLOY_ENV"
+                    test -s "$DEPLOY_ROOT/config/secrets/api-crypto-v2-public.pem"
+                    test -s "$DEPLOY_ROOT/config/secrets/api-crypto-v2-private.pem"
+                    test -s "$RELEASE_DIR/PaymentMonitorServer/deploy/docker-compose.ports.yml"
+                    test -s "$RELEASE_DIR/PaymentMonitorAdmin/deploy/nginx.ports.conf"
+                    docker version
+                    docker compose version
+                    cd "$RELEASE_DIR/PaymentMonitorServer/deploy"
+                    BACKEND_IMAGE="$BACKEND_IMAGE" \
+                    ADMIN_IMAGE="$ADMIN_IMAGE" \
+                      docker compose --env-file "$DEPLOY_ENV" \
+                        -f docker-compose.ports.yml config --quiet
+                '''
+            }
+        }
+
+        stage('Tests') {
+            when {
+                allOf {
+                    expression { params.ACTION == 'DEPLOY' }
+                    expression { params.RUN_TESTS }
+                }
+            }
+            parallel {
+                stage('Backend payment tests') {
+                    steps {
+                        sh '''
+                            set -euo pipefail
+                            test_docker_name="payment-monitor-test-docker-${BUILD_NUMBER}"
+                            test_network_name="payment-monitor-test-network-${BUILD_NUMBER}"
+                            test_docker_cache="payment-monitor-testcontainers-docker-cache"
+
+                            cleanup_test_docker() {
+                              docker rm -f "$test_docker_name" >/dev/null 2>&1 || true
+                              docker network rm "$test_network_name" >/dev/null 2>&1 || true
+                            }
+                            trap cleanup_test_docker EXIT INT TERM
+                            cleanup_test_docker
+
+                            docker network create "$test_network_name" >/dev/null
+                            docker run -d --rm --privileged \
+                              --name "$test_docker_name" \
+                              --network "$test_network_name" \
+                              --network-alias test-docker \
+                              -e DOCKER_TLS_CERTDIR= \
+                              -v "$test_docker_cache:/var/lib/docker" \
+                              docker:27-dind \
+                              --host=tcp://0.0.0.0:2375 \
+                              --host=unix:///var/run/docker.sock >/dev/null
+
+                            deadline=$(( $(date +%s) + 120 ))
+                            until docker exec "$test_docker_name" docker info >/dev/null 2>&1; do
+                              if [ "$(date +%s)" -ge "$deadline" ]; then
+                                docker logs "$test_docker_name"
+                                exit 1
+                              fi
+                              sleep 2
+                            done
+
+                            docker run --rm \
+                              --network "$test_network_name" \
+                              -e DOCKER_HOST=tcp://test-docker:2375 \
+                              -e TESTCONTAINERS_HOST_OVERRIDE=test-docker \
+                              -v ruoyi-maven-repo:/root/.m2 \
+                              -v "$RELEASE_DIR/PaymentMonitorServer:/workspace" \
+                              -w /workspace \
+                              eclipse-temurin:21-jdk-jammy \
+                              bash -lc '
+                                set -eu
+                                chmod +x mvnw
+                                ./mvnw -ntp \
+                                  -pl ruoyi-modules/ruoyi-payment \
+                                  -am \
+                                  -Dmaven.test.skip=false \
+                                  -Dtest.groups=dev,integration \
+                                  test
+                              '
+                        '''
+                    }
+                }
+                stage('Admin tests') {
+                    steps {
+                        sh '''
+                            set -euo pipefail
+                            docker run --rm \
+                              -v ruoyi-pnpm-store:/pnpm/store \
+                              -v "$RELEASE_DIR/PaymentMonitorAdmin:/workspace" \
+                              -w /workspace \
+                              node:22-alpine \
+                              sh -lc '
+                                set -eu
+                                corepack enable
+                                pnpm config set store-dir /pnpm/store
+                                pnpm install --frozen-lockfile
+                                pnpm test:payment
+                                pnpm build:prod
+                                pnpm exec vue-tsc --noEmit
+                                pnpm lint
+                              '
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Backup') {
+            when {
+                anyOf {
+                    expression { params.ACTION == 'DEPLOY' }
+                    expression { params.ACTION == 'ROLLBACK' }
+                    expression { params.ACTION == 'BACKUP' }
+                }
+            }
+            steps {
+                script {
+                    env.BACKUP_ID = params.ACTION == 'DEPLOY'
+                        ? env.RELEASE_ID
+                        : "${params.ACTION.toLowerCase()}-${env.BUILD_NUMBER}-${env.OPERATION_TIME}"
+                    env.BACKUP_DIR = "${env.DEPLOY_ROOT}/backups/jenkins-${env.BACKUP_ID}"
+                }
+                sh '''
+                    set -euo pipefail
+                    umask 077
+                    mkdir -p "$BACKUP_DIR"
+                    docker ps --no-trunc > "$BACKUP_DIR/docker-ps.txt"
+                    docker images --no-trunc > "$BACKUP_DIR/docker-images.txt"
+                    docker inspect \
+                      payment-monitor-backend-1 \
+                      payment-monitor-gateway-1 \
+                      payment-monitor-postgres-1 \
+                      payment-monitor-redis-1 \
+                      payment-monitor-minio-1 \
+                      > "$BACKUP_DIR/container-inspect.json"
+                    cp -a "$DEPLOY_ENV" "$BACKUP_DIR/.env.production"
+                    docker cp \
+                      1Panel-openresty-airy:/usr/local/openresty/nginx/conf/conf.d/your-domain.example.com.conf \
+                      "$BACKUP_DIR/your-domain.example.com.conf"
+                    docker cp \
+                      1Panel-openresty-airy:/www/sites/your-domain.example.com/proxy/root.conf \
+                      "$BACKUP_DIR/pay-root.conf"
+                    docker exec payment-monitor-postgres-1 \
+                      pg_dump -U payment_monitor -d payment_monitor -Fc \
+                      > "$BACKUP_DIR/payment_monitor.dump"
+                    sha256sum "$BACKUP_DIR/payment_monitor.dump" \
+                      > "$BACKUP_DIR/payment_monitor.dump.sha256"
+                    printf '%s\n' "$PREVIOUS_RELEASE" > "$BACKUP_DIR/previous-release.txt"
+                    chmod 700 "$BACKUP_DIR"
+                    chmod 600 "$BACKUP_DIR"/*
+                    echo "backup_dir=$BACKUP_DIR"
+                    du -sh "$BACKUP_DIR"
+                '''
+            }
+        }
+
+        stage('Build release images') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+                    cd "$RELEASE_DIR/PaymentMonitorServer/deploy"
+                    BACKEND_IMAGE="$BACKEND_IMAGE" \
+                    ADMIN_IMAGE="$ADMIN_IMAGE" \
+                    DOCKER_BUILDKIT=1 \
+                      docker compose --env-file "$DEPLOY_ENV" \
+                        -f docker-compose.ports.yml \
+                        build --pull backend gateway
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                expression { params.ACTION == 'DEPLOY' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+                    cd "$RELEASE_DIR/PaymentMonitorServer/deploy"
+
+                    wait_health() {
+                      container="$1"
+                      timeout_seconds="$2"
+                      started_at="$(date +%s)"
+                      while :; do
+                        status="$(
+                          docker inspect --format \
+                            '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                            "$container" 2>/dev/null || true
+                        )"
+                        echo "$container=$status"
+                        [ "$status" = healthy ] && return 0
+                        if [ $(( $(date +%s) - started_at )) -ge "$timeout_seconds" ]; then
+                          docker logs --tail=240 "$container" || true
+                          return 1
+                        fi
+                        sleep 5
+                      done
+                    }
+
+                    restore_previous() {
+                      rc=$?
+                      trap - ERR
+                      rollback_dir="$PREVIOUS_RELEASE"
+                      if [ -n "$rollback_dir" ] && [ -s "$rollback_dir/.release.env" ]; then
+                        echo "restoring previous release: $rollback_dir"
+                        set -a
+                        . "$rollback_dir/.release.env"
+                        set +a
+                        cd "$rollback_dir/PaymentMonitorServer/deploy"
+                        docker compose --env-file "$DEPLOY_ENV" \
+                          -f docker-compose.ports.yml \
+                          up -d --no-build --no-deps backend
+                        wait_health payment-monitor-backend-1 420
+                        docker compose --env-file "$DEPLOY_ENV" \
+                          -f docker-compose.ports.yml \
+                          up -d --no-build --no-deps gateway
+                        wait_health payment-monitor-gateway-1 180
+                        ln -sfn "$rollback_dir" "$DEPLOY_ROOT/current"
+                      fi
+                      exit "$rc"
+                    }
+                    trap restore_previous ERR
+
+                    cat > "$RELEASE_DIR/.release.env" <<EOF
+RELEASE_ID=$RELEASE_ID
+RELEASE_DIR=$RELEASE_DIR
+BACKEND_IMAGE=$BACKEND_IMAGE
+ADMIN_IMAGE=$ADMIN_IMAGE
+DEPLOY_ENV=$DEPLOY_ENV
+SERVER_COMMIT=$SERVER_COMMIT
+ADMIN_COMMIT=$ADMIN_COMMIT
+PREVIOUS_RELEASE=$PREVIOUS_RELEASE
+EOF
+                    chmod 644 "$RELEASE_DIR/.release.env"
+
+                    docker compose --env-file "$DEPLOY_ENV" \
+                      -f docker-compose.ports.yml up -d --no-deps backend
+                    wait_health payment-monitor-backend-1 420
+
+                    docker compose --env-file "$DEPLOY_ENV" \
+                      -f docker-compose.ports.yml up -d --no-deps gateway
+                    wait_health payment-monitor-gateway-1 180
+
+                    docker exec payment-monitor-gateway-1 \
+                      wget -qO- http://127.0.0.1/ >/dev/null
+
+                    ln -sfn "$RELEASE_DIR" "$DEPLOY_ROOT/current"
+                    {
+                      echo "finalized_at=$(date -Is)"
+                      echo "release=$RELEASE_DIR"
+                      echo "backup=$BACKUP_DIR"
+                      echo "server_commit=$SERVER_COMMIT"
+                      echo "admin_commit=$ADMIN_COMMIT"
+                      echo "backend_image=$BACKEND_IMAGE"
+                      echo "admin_image=$ADMIN_IMAGE"
+                    } > "$RELEASE_DIR/DEPLOYED"
+                    trap - ERR
+                '''
+            }
+        }
+
+        stage('Rollback') {
+            when {
+                expression { params.ACTION == 'ROLLBACK' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+                    target="$(readlink -f "$TARGET_RELEASE_DIR" 2>/dev/null || true)"
+                    case "$target" in
+                      "$DEPLOY_ROOT"/releases/*) ;;
+                      *) echo "invalid target release: $target" >&2; exit 1 ;;
+                    esac
+                    test -s "$target/.release.env"
+                    test -s "$target/PaymentMonitorServer/deploy/docker-compose.ports.yml"
+                    original="$PREVIOUS_RELEASE"
+
+                    wait_health() {
+                      container="$1"
+                      timeout_seconds="$2"
+                      started_at="$(date +%s)"
+                      while :; do
+                        status="$(
+                          docker inspect --format \
+                            '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                            "$container" 2>/dev/null || true
+                        )"
+                        echo "$container=$status"
+                        [ "$status" = healthy ] && return 0
+                        [ $(( $(date +%s) - started_at )) -lt "$timeout_seconds" ] || return 1
+                        sleep 5
+                      done
+                    }
+
+                    restore_original() {
+                      rc=$?
+                      trap - ERR
+                      if [ -n "$original" ] && [ -s "$original/.release.env" ]; then
+                        set -a
+                        . "$original/.release.env"
+                        set +a
+                        cd "$original/PaymentMonitorServer/deploy"
+                        docker compose --env-file "$DEPLOY_ENV" \
+                          -f docker-compose.ports.yml \
+                          up -d --no-build --no-deps backend gateway || true
+                        ln -sfn "$original" "$DEPLOY_ROOT/current"
+                      fi
+                      exit "$rc"
+                    }
+                    trap restore_original ERR
+
+                    set -a
+                    . "$target/.release.env"
+                    set +a
+                    cd "$target/PaymentMonitorServer/deploy"
+                    docker compose --env-file "$DEPLOY_ENV" \
+                      -f docker-compose.ports.yml \
+                      up -d --no-build --no-deps backend
+                    wait_health payment-monitor-backend-1 420
+                    docker compose --env-file "$DEPLOY_ENV" \
+                      -f docker-compose.ports.yml \
+                      up -d --no-build --no-deps gateway
+                    wait_health payment-monitor-gateway-1 180
+                    ln -sfn "$target" "$DEPLOY_ROOT/current"
+                    trap - ERR
+                    echo "rolled_back_to=$target"
+                '''
+            }
+        }
+
+        stage('Restart') {
+            when {
+                expression { params.ACTION == 'RESTART' }
+            }
+            steps {
+                sh '''
+                    set -euo pipefail
+                    restart_one() {
+                      service="$1"
+                      case "$service" in
+                        backend) container=payment-monitor-backend-1 ;;
+                        gateway) container=payment-monitor-gateway-1 ;;
+                        *) exit 2 ;;
+                      esac
+                      docker restart "$container"
+                      started_at="$(date +%s)"
+                      while :; do
+                        status="$(
+                          docker inspect --format \
+                            '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                            "$container"
+                        )"
+                        echo "$container=$status"
+                        [ "$status" = healthy ] && break
+                        [ $(( $(date +%s) - started_at )) -lt 420 ] || exit 1
+                        sleep 5
+                      done
+                    }
+
+                    if [ "$RESTART_SERVICE" = all ]; then
+                      restart_one backend
+                      restart_one gateway
+                    else
+                      restart_one "$RESTART_SERVICE"
+                    fi
+                '''
+            }
+        }
+
+        stage('Verify') {
+            when {
+                anyOf {
+                    expression { params.ACTION == 'VERIFY' }
+                    expression { params.ACTION == 'DEPLOY' }
+                    expression { params.ACTION == 'ROLLBACK' }
+                    expression { params.ACTION == 'RESTART' }
+                }
+            }
+            steps {
+                sh '''
+                    set -euo pipefail
+                    for container in \
+                      payment-monitor-postgres-1 \
+                      payment-monitor-redis-1 \
+                      payment-monitor-minio-1 \
+                      payment-monitor-backend-1 \
+                      payment-monitor-gateway-1
+                    do
+                      status="$(
+                        docker inspect --format \
+                          '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                          "$container"
+                      )"
+                      echo "$container=$status"
+                      test "$status" = healthy
+                    done
+
+                    curl -fsS -o /dev/null https://your-domain.example.com/
+                    curl -fsS -o /dev/null \
+                      https://your-domain.example.com/prod-api/api/v2/crypto/jwks
+
+                    docker exec payment-monitor-postgres-1 \
+                      psql -U payment_monitor -d payment_monitor -Atc \
+                      "select version from pm_flyway_schema_history where success order by installed_rank desc limit 1;"
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                currentBuild.description =
+                    "${currentBuild.description ?: ''}, result=SUCCESS"
+            }
+        }
+        failure {
+            script {
+                currentBuild.description =
+                    "${currentBuild.description ?: ''}, result=FAILURE"
+            }
+        }
+        always {
+            sh '''
+                set +e
+                echo "current_release=$(readlink -f /opt/payment-monitor/current 2>/dev/null)"
+                docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' \
+                  | grep -E 'NAMES|payment-monitor'
+            '''
+        }
+    }
+}

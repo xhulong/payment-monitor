@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.dromara.payment.mapper.MailOutboxMapper">
+    <resultMap id="MailOutboxResult" type="org.dromara.payment.domain.PmMailOutbox">
+        <id property="id" column="id"/>
+        <result property="messageId" column="message_id"/>
+        <result property="messageType" column="message_type"/>
+        <result property="deduplicationKey" column="deduplication_key"/>
+        <result property="payloadCiphertext" column="payload_ciphertext"/>
+        <result property="encryptionKeyId" column="encryption_key_id"/>
+        <result property="status" column="status"/>
+        <result property="attemptCount" column="attempt_count"/>
+        <result property="maxAttempts" column="max_attempts"/>
+        <result property="nextAttemptAt" column="next_attempt_at"/>
+        <result property="lockedAt" column="locked_at"/>
+        <result property="expiresAt" column="expires_at"/>
+        <result property="sentAt" column="sent_at"/>
+        <result property="lastError" column="last_error"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <select id="claimDue" resultMap="MailOutboxResult">
+        update pm_mail_outbox o
+        set status = 'SENDING',
+            locked_at = #{now},
+            updated_at = #{now}
+        from (
+            select id
+            from pm_mail_outbox
+            where (
+                status in ('PENDING', 'RETRYING')
+                and next_attempt_at &lt;= #{now}
+            ) or (
+                status = 'SENDING'
+                and locked_at &lt;= #{lockCutoff}
+            )
+            order by next_attempt_at asc, id asc
+            for update skip locked
+            limit #{limit}
+        ) due
+        where o.id = due.id
+        returning o.*
+    </select>
+</mapper>

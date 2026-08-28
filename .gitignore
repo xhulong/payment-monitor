@@ -1,0 +1,23 @@
+# ===== 本地开发工具链（非开源交付物）=====
+AGENTS.md
+dispatch_claude.sh
+hermes+claude code自动化工作流/
+工作流使用说明.md
+.codegraph/
+_cleanup-backup-*/
+
+# ===== 环境与密钥 =====
+.env
+.env.local
+.env.production
+.env.ports
+*.pem
+*.key
+*.crt
+
+# ===== 构建产物 =====
+node_modules/
+dist/
+target/
+*.jar
+*.log

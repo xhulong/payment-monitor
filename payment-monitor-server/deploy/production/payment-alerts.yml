@@ -1,0 +1,84 @@
+groups:
+  - name: payment-monitor-platform
+    rules:
+      - alert: PaymentBackendUnavailable
+        expr: up{job="payment-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Payment backend is unavailable
+
+      - alert: PaymentDatabaseUnavailable
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL exporter is unavailable
+
+      - alert: PaymentRedisUnavailable
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Redis exporter is unavailable
+
+      - alert: PaymentHostDiskLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Production host disk space is below 15%
+
+      - alert: PaymentWebhookBacklog
+        expr: payment_outbox_backlog > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook outbox backlog exceeds 50 jobs
+
+      - alert: PaymentWebhookFailures
+        expr: increase(payment_webhook_deliveries_failure[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook failures are increasing
+
+      - alert: PaymentMailOutboxBacklog
+        expr: payment_mail_outbox_backlog > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Mail outbox backlog exceeds 20 jobs
+
+      - alert: PaymentMailOutboxDead
+        expr: payment_mail_outbox_dead > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Mail outbox contains dead jobs
+
+      - alert: PaymentDevicesOffline
+        expr: payment_online_devices < 1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: No payment observation device is online
+
+      - alert: PaymentOrderMatchLatencyHigh
+        expr: payment_order_match_latency_ms > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Payment order matching latency exceeds 5 seconds

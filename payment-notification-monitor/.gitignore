@@ -1,0 +1,17 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+/build
+/captures
+.externalNativeBuild
+.cxx
+app/build
+/app/release/
+/tmp/
+/*.log
+/signing.properties
+*.jks
+*.keystore
+/research/phase-c/raw/
+/research/phase-c/generated/

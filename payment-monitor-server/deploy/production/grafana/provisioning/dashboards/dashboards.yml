@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: Payment Monitor
+    folder: Payment Monitor
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

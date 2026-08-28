@@ -1,0 +1,183 @@
+name: payment-monitor
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: payment_monitor
+      POSTGRES_USER: payment_monitor
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - payment_monitor_postgres:/var/lib/postgresql/data
+      - ../script/sql/postgres/postgres_ry_vue.sql:/docker-entrypoint-initdb.d/00_ry_vue.sql:ro
+      - ../script/sql/postgres/postgres_ry_job.sql:/docker-entrypoint-initdb.d/01_ry_job.sql:ro
+      - ../script/sql/postgres/postgres_ry_workflow.sql:/docker-entrypoint-initdb.d/02_ry_workflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_monitor -d payment_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - payment_monitor_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
+    logging: *default-logging
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - payment_monitor_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+    logging: *default-logging
+
+  backend:
+    image: ${BACKEND_IMAGE:-payment-monitor-backend:latest}
+    build:
+      context: ..
+      dockerfile: deploy/production/backend.Dockerfile
+    user: "10001:0"
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_BIND_HOST:-127.0.0.1}:${BACKEND_PORT:-18082}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/payment_monitor
+      DB_USERNAME: payment_monitor
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      SA_TOKEN_JWT_SECRET: ${SA_TOKEN_JWT_SECRET}
+      PAYMENT_MASTER_KEY: ${PAYMENT_MASTER_KEY}
+      PAYMENT_PUBLIC_BASE_URL: ${PAYMENT_PUBLIC_BASE_URL:-http://127.0.0.1:18081}
+      PAYMENT_RAW_PAYLOAD_UPLOAD_ENABLED: ${PAYMENT_RAW_PAYLOAD_UPLOAD_ENABLED:-false}
+      PAYMENT_WEBHOOK_ENABLED: ${PAYMENT_WEBHOOK_ENABLED:-true}
+      PAYMENT_WEBHOOK_ALLOW_HTTP: ${PAYMENT_WEBHOOK_ALLOW_HTTP:-false}
+      PAYMENT_WEBHOOK_ALLOW_PRIVATE_NETWORK: ${PAYMENT_WEBHOOK_ALLOW_PRIVATE_NETWORK:-false}
+      PAYMENT_EASYPAY_ENABLED: ${PAYMENT_EASYPAY_ENABLED:-true}
+      PAYMENT_EASYPAY_ALLOW_HTTP: ${PAYMENT_EASYPAY_ALLOW_HTTP:-false}
+      PAYMENT_EASYPAY_ALLOW_PRIVATE_NETWORK: ${PAYMENT_EASYPAY_ALLOW_PRIVATE_NETWORK:-false}
+      PAYMENT_EASYPAY_REQUIRE_HTTPS_QUERY: ${PAYMENT_EASYPAY_REQUIRE_HTTPS_QUERY:-true}
+      PAYMENT_INTEGRATION_ACTIVE_KEY_ID: ${PAYMENT_INTEGRATION_ACTIVE_KEY_ID:-payment-integration-2026-01}
+      PAYMENT_INTEGRATION_MASTER_KEY: ${PAYMENT_INTEGRATION_MASTER_KEY}
+      PAYMENT_MERCHANT_API_RATE_LIMIT_PER_MINUTE: ${PAYMENT_MERCHANT_API_RATE_LIMIT_PER_MINUTE:-120}
+      PAYMENT_AGREEMENT_VERSION: ${PAYMENT_AGREEMENT_VERSION:-2026-07}
+      PAYMENT_PRIVACY_VERSION: ${PAYMENT_PRIVACY_VERSION:-2026-07}
+      ACCOUNT_MFA_MASTER_KEY: ${ACCOUNT_MFA_MASTER_KEY}
+      ACCOUNT_RECOVERY_CODE_PEPPER: ${ACCOUNT_RECOVERY_CODE_PEPPER}
+      MAIL_OUTBOX_MASTER_KEY: ${MAIL_OUTBOX_MASTER_KEY}
+      MAIL_OUTBOX_ACTIVE_KEY_ID: ${MAIL_OUTBOX_ACTIVE_KEY_ID:-mail-outbox-2026-01}
+      MAIL_SETTINGS_MASTER_KEY: ${MAIL_SETTINGS_MASTER_KEY}
+      MAIL_SETTINGS_ACTIVE_KEY_ID: ${MAIL_SETTINGS_ACTIVE_KEY_ID:-mail-settings-2026-01}
+      APK_DOWNLOAD_SIGNING_SECRET: ${APK_DOWNLOAD_SIGNING_SECRET}
+      ANDROID_EXPECTED_PACKAGE_NAME: ${ANDROID_EXPECTED_PACKAGE_NAME:-com.xhulong.paymentmonitor}
+      ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: ${ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256:-}
+      AUTH_REFRESH_COOKIE_SECURE: ${AUTH_REFRESH_COOKIE_SECURE:-false}
+      API_CRYPTO_V2_ENABLED: ${API_CRYPTO_V2_ENABLED:-true}
+      API_CRYPTO_V2_ACTIVE_KID: ${API_CRYPTO_V2_ACTIVE_KID:-payment-monitor-rsa-2026-01}
+      API_CRYPTO_V2_KEY_PROVIDER: local-secret
+      API_CRYPTO_V2_PUBLIC_KEY_FILE: /run/secrets/api_crypto_v2_public_key
+      API_CRYPTO_V2_PRIVATE_KEY_FILE: /run/secrets/api_crypto_v2_private_key
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-payment-monitor-private}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_FROM: ${SMTP_FROM:-noreply@localhost}
+      SMTP_USERNAME: ${SMTP_USERNAME:-noreply@localhost}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-disabled}
+      SMTP_STARTTLS_ENABLE: ${SMTP_STARTTLS_ENABLE:-false}
+      SMTP_SSL_ENABLE: ${SMTP_SSL_ENABLE:-false}
+      MONITOR_USERNAME: ${MONITOR_USERNAME:-prometheus}
+      MONITOR_PASSWORD: ${MONITOR_PASSWORD}
+      TZ: Asia/Shanghai
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=70 -XX:+HeapDumpOnOutOfMemoryError}
+    secrets:
+      - api_crypto_v2_public_key
+      - api_crypto_v2_private_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    networks: [edge, backend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  gateway:
+    image: ${ADMIN_IMAGE:-payment-monitor-admin:latest}
+    build:
+      context: ../../PaymentMonitorAdmin
+      dockerfile: Dockerfile.ports
+      args:
+        VITE_APP_API_CRYPTO_V2: "true"
+    restart: unless-stopped
+    ports:
+      - "${ADMIN_BIND_HOST:-0.0.0.0}:${ADMIN_PORT:-18081}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [edge, backend]
+    logging: *default-logging
+
+networks:
+  edge:
+    name: payment-monitor-edge
+  backend:
+    name: payment-monitor-backend
+    internal: true
+
+volumes:
+  payment_monitor_postgres:
+    name: payment-monitor-postgres
+  payment_monitor_redis:
+    name: payment-monitor-redis
+  payment_monitor_minio:
+    name: payment-monitor-minio
+
+secrets:
+  api_crypto_v2_public_key:
+    file: ${API_CRYPTO_V2_PUBLIC_KEY_HOST_FILE}
+  api_crypto_v2_private_key:
+    file: ${API_CRYPTO_V2_PRIVATE_KEY_HOST_FILE}

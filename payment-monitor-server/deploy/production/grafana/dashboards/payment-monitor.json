@@ -1,0 +1,55 @@
+{
+  "title": "Payment Monitor",
+  "uid": "payment-monitor-phase-g",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "支付事件",
+      "id": 1,
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "payment_events_ingested", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "已支付订单",
+      "id": 2,
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "payment_orders_paid", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "在线设备",
+      "id": 3,
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "payment_online_devices", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Outbox 积压",
+      "id": 4,
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "payment_outbox_backlog", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "订单匹配延迟 (ms)",
+      "id": 5,
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 7 },
+      "targets": [{ "expr": "payment_order_match_latency_ms", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Webhook 成功/失败",
+      "id": 6,
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 7 },
+      "targets": [
+        { "expr": "payment_webhook_deliveries_success", "legendFormat": "成功", "refId": "A" },
+        { "expr": "payment_webhook_deliveries_failure", "legendFormat": "失败", "refId": "B" }
+      ]
+    }
+  ]
+}
