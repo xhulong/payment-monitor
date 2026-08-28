@@ -2,6 +2,8 @@
 
 > 面向个人 / 小微收款的**码支付（收款码）监控与管理平台**：Android 端实时监听微信 / 支付宝收款通知并自动上报，服务端集中管理商户、订单、交易与对账，内置告警通知、消息中心、多因素认证等安全能力。
 
+> 🌐 **在线体验**：[https://pay.luluapi.cc.cd/](https://pay.luluapi.cc.cd/)
+
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/xhulong/payment-monitor?style=social&label=Stars)](https://github.com/xhulong/payment-monitor)
 [![GitHub Forks](https://img.shields.io/github/forks/xhulong/payment-monitor?style=social&label=Forks)](https://github.com/xhulong/payment-monitor)
