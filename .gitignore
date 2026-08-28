@@ -4,6 +4,8 @@ dispatch_claude.sh
 hermes+claude code自动化工作流/
 工作流使用说明.md
 .codegraph/
+.codex/
+.run/
 _cleanup-backup-*/
 
 # ===== 环境与密钥 =====
