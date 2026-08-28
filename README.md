@@ -18,11 +18,9 @@
 
 ## 界面预览
 
-> 📸 以下为占位示意图，正式截图将在后续版本中替换（替换 `docs/screenshots/` 下同名文件即可）。
-
 | 管理后台 - 数据仪表盘 | 支付事件监控 | Android 收款通知 |
 | :---: | :---: | :---: |
-| ![dashboard](docs/screenshots/dashboard.svg) | ![monitor](docs/screenshots/monitor.svg) | ![android](docs/screenshots/android.svg) |
+| ![dashboard](docs/screenshots/dashboard.png) | ![monitor](docs/screenshots/monitor.png) | ![android](docs/screenshots/android.png) |
 
 ---
 
