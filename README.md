@@ -89,8 +89,8 @@ payment/
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/your-org/payment-monitor.git
-cd payment/payment-monitor-server
+git clone https://github.com/xhulong/payment-monitor.git
+cd payment-monitor/payment-monitor-server
 
 # 2. 准备环境变量（参考 deploy/.env.ports.example）
 cp deploy/.env.ports.example deploy/.env
