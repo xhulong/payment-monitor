@@ -3,11 +3,26 @@
 > 面向个人 / 小微收款的**码支付（收款码）监控与管理平台**：Android 端实时监听微信 / 支付宝收款通知并自动上报，服务端集中管理商户、订单、交易与对账，内置告警通知、消息中心、多因素认证等安全能力。
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/xhulong/payment-monitor?style=social&label=Stars)](https://github.com/xhulong/payment-monitor)
+[![GitHub Forks](https://img.shields.io/github/forks/xhulong/payment-monitor?style=social&label=Forks)](https://github.com/xhulong/payment-monitor)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-blue.svg)]()
 [![JDK](https://img.shields.io/badge/JDK-21-green.svg)]()
 [![Vue](https://img.shields.io/badge/Vue-3.5-green.svg)]()
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue.svg)]()
 [![Android](https://img.shields.io/badge/Android-Kotlin%20%2B%20Compose-brightgreen.svg)]()
+
+> ⭐ **如果这个项目对你有帮助，请给我们点个 Star 支持一下**，你的支持是我们持续维护的动力！
+> [![Star History](https://api.star-history.com/svg?repos=xhulong/payment-monitor&type=Date)](https://star-history.com/#xhulong/payment-monitor&Date)
+
+---
+
+## 界面预览
+
+> 📸 以下为占位示意图，正式截图将在后续版本中替换（替换 `docs/screenshots/` 下同名文件即可）。
+
+| 管理后台 - 数据仪表盘 | 支付事件监控 | Android 收款通知 |
+| :---: | :---: | :---: |
+| ![dashboard](docs/screenshots/dashboard.svg) | ![monitor](docs/screenshots/monitor.svg) | ![android](docs/screenshots/android.svg) |
 
 ---
 
